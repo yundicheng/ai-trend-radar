@@ -11,6 +11,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from analysis import compare_snapshots
 from database import get_repos_by_date, get_snapshot_dates
 
 st.set_page_config(page_title="AI Trend Radar", page_icon="📡", layout="wide")
@@ -35,6 +36,16 @@ def load_latest_snapshot() -> tuple[str | None, pd.DataFrame]:
     latest_date = dates[0]  # get_snapshot_dates() already sorts newest first
     repos = get_repos_by_date(latest_date)
     return latest_date, pd.DataFrame(repos)
+
+
+@st.cache_data
+def load_snapshot(collected_date: str) -> pd.DataFrame:
+    """Load one date's snapshot from the database as a DataFrame.
+
+    Used by the date-comparison section below, where the two dates being
+    compared are picked by the user rather than always being "the latest."
+    """
+    return pd.DataFrame(get_repos_by_date(collected_date))
 
 
 st.title("📡 AI Trend Radar")
@@ -102,3 +113,51 @@ fig.update_xaxes(showgrid=False, linecolor="#c3c2b7")
 fig.update_yaxes(gridcolor="#e1e0d9", zeroline=False)
 
 st.plotly_chart(fig, width="stretch")
+
+st.divider()
+
+# --- Compare two snapshot dates ---------------------------------------------
+st.subheader("Compare two snapshot dates")
+
+all_dates = get_snapshot_dates()  # newest first
+oldest_to_newest = list(reversed(all_dates))
+
+if len(all_dates) < 2:
+    st.info("Collect a snapshot on at least one more day to unlock date comparison.")
+else:
+    date_col1, date_col2 = st.columns(2)
+    older_date = date_col1.selectbox("Older date", options=oldest_to_newest, index=0)
+    newer_date = date_col2.selectbox("Newer date", options=all_dates, index=0)
+
+    if older_date == newer_date:
+        st.warning("Pick two different dates to compare.")
+    else:
+        older_df = load_snapshot(older_date)
+        newer_df = load_snapshot(newer_date)
+        comparison = compare_snapshots(older_df, newer_df)
+
+        link_column = st.column_config.LinkColumn("URL", display_text="Open ↗")
+
+        st.markdown(f"**New** -- appeared in {newer_date}, not present on {older_date}")
+        st.dataframe(
+            comparison["new"].sort_values("stars", ascending=False),
+            hide_index=True,
+            width="stretch",
+            column_config={"url": link_column},
+        )
+
+        st.markdown(f"**Disappeared** -- present on {older_date}, missing from {newer_date}")
+        st.dataframe(
+            comparison["removed"].sort_values("stars", ascending=False),
+            hide_index=True,
+            width="stretch",
+            column_config={"url": link_column},
+        )
+
+        st.markdown(f"**Present on both dates** -- star and fork change from {older_date} to {newer_date}")
+        st.dataframe(
+            comparison["common"].sort_values("star_change", ascending=False),
+            hide_index=True,
+            width="stretch",
+            column_config={"url": link_column},
+        )

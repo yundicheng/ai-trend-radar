@@ -24,7 +24,7 @@ def get_today() -> str:
     return date.today().isoformat()
 
 
-def collect_snapshot(limit_per_topic: int = 10) -> list[dict]:
+def collect_snapshot(limit_per_topic: int = 50) -> list[dict]:
     """Fetch fresh repo data from GitHub and save it as today's snapshot.
 
     This function does three things, in order:

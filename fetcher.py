@@ -81,7 +81,7 @@ def _to_repo_dict(item: dict) -> dict:
 
 
 def fetch_trending_repos(
-    topics: list[str] = DEFAULT_TOPICS, limit_per_topic: int = 10
+    topics: list[str] = DEFAULT_TOPICS, limit_per_topic: int = 50
 ) -> list[dict]:
     """Fetch AI-related repos for each topic and return one combined list.
 
