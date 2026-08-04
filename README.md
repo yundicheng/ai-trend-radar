@@ -4,9 +4,9 @@ A beginner-friendly portfolio project that tracks emerging AI and open-source
 trends by collecting GitHub repository data into daily snapshots, then
 displaying it as a dashboard.
 
-This is an MVP: it collects data, stores it, and visualizes it. It does not
-yet generate AI-written insights, compare across dates, or run on a schedule
-(see [Current limitations](#current-limitations) below).
+This is an MVP: it collects data, stores it, visualizes it, and compares
+snapshots across dates. It does not yet generate AI-written insights or run
+on a schedule (see [Current limitations](#current-limitations) below).
 
 ## What it does
 
@@ -16,6 +16,8 @@ yet generate AI-written insights, compare across dates, or run on a schedule
    URL into a local SQLite database, tagged with the date it was collected.
 3. Displays that data in a Streamlit dashboard: overview metrics, a
    searchable/sortable table, and a language-distribution chart.
+4. Lets you pick two collection dates and compare them: which repos are new,
+   which disappeared, and how stars/forks changed for repos present on both.
 
 ## Architecture
 
@@ -34,6 +36,10 @@ collect.py  ── glue: calls fetcher.py, then database.py, to save one snapsho
     │
     ▼
 app.py      ── reads from database.py and renders the Streamlit dashboard
+    │
+    ▼
+analysis.py ── pure pandas comparison logic, called by app.py for the
+                date-comparison view (new / removed / changed repos)
 ```
 
 `collect.py` and `app.py` never run at the same time by default -- collection
@@ -47,7 +53,8 @@ displays whatever is already saved.
 | `database.py` | Creates the `repo_snapshots` SQLite table; inserts rows; reads rows back by date. |
 | `fetcher.py` | Calls the GitHub Search API and converts the response into the dict shape `database.py` expects. |
 | `collect.py` | Wires `fetcher.py` and `database.py` together: fetch today's data, save it as today's snapshot. |
-| `app.py` | The Streamlit dashboard. Reads the latest snapshot and displays metrics, a table, and a chart. |
+| `analysis.py` | Compares two snapshots (as DataFrames) and splits the result into new/removed/common repos, with star and fork deltas for the common ones. No SQLite or Streamlit dependency -- pure pandas. |
+| `app.py` | The Streamlit dashboard. Reads snapshots via `database.py` and displays metrics, a table, a chart, and the date-comparison view (via `analysis.py`). |
 | `requirements.txt` | The Python packages the project depends on. |
 
 ### Data storage
@@ -97,9 +104,6 @@ No token is required to run the project.
 
 This MVP intentionally does not include:
 
-- **Date comparison** -- the database supports storing multiple days of
-  snapshots, but the dashboard only displays the latest one so far. A
-  "compare two dates" view is planned once real multi-day data exists.
 - **Automatic/scheduled collection** -- `collect.py` must be run manually.
   There is no daily cron job or background scheduler.
 - **AI-generated trend analysis** -- no LLM is used anywhere in this
@@ -116,3 +120,10 @@ This MVP intentionally does not include:
   stars) -- the dashboard doesn't attempt to filter these out.
 - The language chart groups repos with no listed language under "Unknown"
   rather than excluding them.
+- Running `collect.py` more than once on the same day adds a second batch of
+  rows for that date rather than replacing the first -- there's no
+  deduplication against previously stored rows for the same `collected_date`.
+  This can make that day's repo count (and the comparison view) look inflated
+  until the extra rows are manually removed from `data/trend_radar.db`.
+- The date-comparison view always defaults to the oldest vs. newest available
+  snapshot, not the two most recent ones.
